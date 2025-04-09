@@ -24,53 +24,11 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <util/config-file.h>
 #include <util/threading.h>
 #include <graphics/graphics.h>
-#include <pthread.h>
 
-#if defined(_WIN32) || defined(_WIN64)
-	#define FILE_SEPARATOR "\\"
-	#define HOME_DIR "UserProfile"
-#else
-	#define FILE_SEPARATOR "/"
-	#define HOME_DIR "HOME"
-#endif
-
-#if _MSC_VER
-	#define __popen _popen
-	#define __pclose _pclose
-#else
-	#define __popen popen
-	#define __pclose pclose
-#endif
-
-#define MAX_LINE_LENGTH 1024
-
-OBS_DECLARE_MODULE()
-OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
-
-const char *config_file_string = "obs-fightrecorder.json";
-
-typedef struct fightrecorder_data {
-	bool active;
-	bool concatdelete;
-	bool concat;
-	const char *logs_dir;
-	const char *logs_regex;
-	const char *output_dir;
-	__int64 grace_period;
-	const char *adv_options;
-} fightrecorder_data_t;
-
-typedef struct logfile {
-	char *file_path;
-	FILE *fp;
-	int64_t file_position;
-	struct logfile *next;
-} logfile_t;
+#include "plugin-main.h"
 
 obs_source_t *fightrecorder_source = NULL;
 fightrecorder_data_t *fightrecorder = NULL;
-bool fightrecorder_active = false;
-bool fightrecorder_started_recording = false;
 
 obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 {
@@ -116,9 +74,9 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 
 void save_replay_buffer_start_recording()
 {
-	if (!fightrecorder_active)
+	if (!fightrecorder->active)
 		return;
-	if (fightrecorder_started_recording)
+	if (fightrecorder->started_recording)
 		return;
 
 	if (obs_frontend_replay_buffer_active()) {
@@ -128,14 +86,14 @@ void save_replay_buffer_start_recording()
 
 	obs_frontend_recording_start();
 	blog(LOG_DEBUG, "obs-fightrecorder started recording");
-	fightrecorder_started_recording = true;
+	fightrecorder->started_recording = true;
 }
 
 void stop_recording()
 {
-	if (fightrecorder_started_recording) {
+	if (fightrecorder->started_recording) {
 		obs_frontend_recording_stop();
-		fightrecorder_started_recording = false;
+		fightrecorder->started_recording = false;
 		blog(LOG_DEBUG, "obs-fightrecorder stopped recording");
 	}
 }
@@ -232,8 +190,6 @@ void add_logfile_if_not_exists(logfile_t **head, const char *file_path)
 	}
 }
 
-
-
 void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 {
 	int sleep = 1000;
@@ -254,6 +210,9 @@ void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 	}
 
 	while (true) {
+		if (!fightrecorder->active) {
+			break;
+		}
 
 		// ~30s check for new files
 		if (update_files_iter >= update_files_sleep) {
@@ -286,6 +245,7 @@ void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 
 			}
 			os_closedir(dir);
+			obs_log(LOG_DEBUG, "observer thread still runnning");
 		}
 
 		//~1s check for new content in the files
@@ -318,11 +278,12 @@ void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 		if (combat) {
 			end_recording_time = current_time + arg->grace_period;
 
-			if (!fightrecorder_started_recording) {
+			if (!fightrecorder->started_recording) {
 				save_replay_buffer_start_recording();
 			}
 		} else {
-			if (fightrecorder_started_recording && current_time > end_recording_time) {
+			if (fightrecorder->started_recording &&
+			    current_time > end_recording_time) {
 				stop_recording();
 				combat = false;
 			}
@@ -332,8 +293,26 @@ void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 		combat = false;
 		update_files_iter += sleep;
 	}
+
+	obs_log(LOG_INFO, "Observer thread stopped gracefully");
+	return NULL;
 }
 
+void start_observer_thread()
+{
+	pthread_create(&fightrecorder->thread_id, NULL,
+		       monitor_file_and_control_recording, fightrecorder);
+	obs_log(LOG_INFO, "Observer thread started");
+}
+
+void start_replaybuffer_if_active()
+{
+	if (fightrecorder->active) {
+		if (!obs_frontend_replay_buffer_active()) {
+			obs_frontend_replay_buffer_start();
+		}
+	}
+}
 
 void obs_module_unload(void)
 {
@@ -394,36 +373,6 @@ void dummy_source_defaults(obs_data_t *settings)
 	bfree(default_path_logs);
 }
 
-
-void start_observer_thread()
-{
-	pthread_t thread_id;
-	pthread_create(&thread_id, NULL, monitor_file_and_control_recording,
-		       fightrecorder);
-
-	obs_log(LOG_INFO, "Observer thread started %d", &thread_id);
-}
-void stop_observer_thread()
-{
-	/* obs_log(LOG_INFO, "Observer thread stopping %d", thread_id);
-	if (thread_id != NULL && !fightrecorder_started_recording) {
-		pthread_kill(*thread_id, 9); // lazy, sry.
-	}
-	obs_log(LOG_INFO, "Observer thread stopped %d", &thread_id);*/
-}
-
-
-void start_replaybuffer_if_active()
-{
-	if (fightrecorder->active) {
-		if (!obs_frontend_replay_buffer_active()) {
-			obs_frontend_replay_buffer_start();
-		}
-	}
-}
-
-
-
 void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 {
 	bool active_past = data->active;
@@ -438,9 +387,6 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 	data->grace_period = obs_data_get_int(settings, "fightrecorder_grace_period");
 	data->adv_options = obs_data_get_string(settings, "fight_recorder_advanced_options");
 
-
-	fightrecorder_active = data->active;
-
 	if (!active_past && data->active) {
 		obs_log(LOG_DEBUG, "fightrecorder_active [false -> true]");
 		start_observer_thread();
@@ -448,7 +394,7 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 	}
 	else if (active_past && !data->active) {
 		obs_log(LOG_DEBUG, "fightrecorder_active [true -> false]");
-		stop_observer_thread();
+		obs_log(LOG_DEBUG, "Observer thread should stop anytime now...");
 	}
 	obs_log(LOG_DEBUG, "fightrecorder_logs_dir: %s", data->logs_dir);
 	// obs_log(LOG_DEBUG, "fight_recorder_logs_regex: %s", data->logs_regex);
@@ -463,9 +409,6 @@ void *dummy_source_create(obs_data_t *settings, obs_source_t *source)
 	fightrecorder = fightrecorder_args;
 
 	dummy_source_update(fightrecorder_args, settings);
-
-	// Source created/updated, start observer thread
-	start_observer_thread();
 
 	return fightrecorder_args;
 }
@@ -494,7 +437,7 @@ static void source_defaults_frontend_event_cb(enum obs_frontend_event event,
 		//	fightrecorder_active = false; /* User starts recording, not fight recorder*/
 		break;
 	case OBS_FRONTEND_EVENT_RECORDING_STOPPED:
-		fightrecorder_started_recording = false;
+		fightrecorder->started_recording = false;
 		break;
 	}
 }

@@ -18,10 +18,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 
 #pragma once
 
-#include <regex>
-
 #ifdef __cplusplus
-
 extern "C" {
 #endif
 
@@ -39,4 +36,3 @@ extern void blogva(int log_level, const char *format, va_list args);
 #ifdef __cplusplus
 }
 #endif
-
