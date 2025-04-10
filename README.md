@@ -12,6 +12,9 @@ An OBS plugin for the game Eve Online. The plugin detects if you are in combat a
 To build this project please follow the steps [here](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide#windows) for Windows. You need Visual Studio 2022.
 
 ## FAQ
+Is this only available on Windows?
+> Yes.
+
 Which files are observed?
 > The files in the "Gamelogs" directory where something was logged within the last 24 hours. Per default the directory is located in `C:\Users\<user>\Documents\EVE\logs\Gamelogs`
 
