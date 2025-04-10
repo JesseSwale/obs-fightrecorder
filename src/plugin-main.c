@@ -245,7 +245,6 @@ void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 
 			}
 			os_closedir(dir);
-			obs_log(LOG_DEBUG, "observer thread still runnning");
 		}
 
 		//~1s check for new content in the files
