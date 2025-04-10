@@ -38,7 +38,7 @@
   },
   "name": "obs-fightrecorder",
   "displayName": "obs-fightrecorder",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "author": "Jesse Swale",
   "email": "me@exmaple.org",
   "website": "https://github.com/JesseSwale/obs-fightrecorder",
