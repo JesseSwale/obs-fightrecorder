@@ -4,6 +4,10 @@
 ## Introduction
 An OBS plugin for the game Eve Online. The plugin detects if you are in combat and records your gameplay.
 
+<p align="center" width="100%">
+    <img alt="Screenshot obs-fightrecorder" src="./doc/screenshot.png" width="75%">
+</p>
+
 ## Installation
 - Before installing the plugin, make sure to enable the replay buffer functionality in Settings -> Output -> Replay buffer. 
 - Download the zip file from the latest release and put the DLL in the OBS plugins folder, which is `C:\Program Files\obs-studio\obs-plugins\64bit` by default.
