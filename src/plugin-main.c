@@ -45,15 +45,14 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 				NULL, NULL);
 
 	obs_properties_add_int(group_main, "fightrecorder_grace_period",
-			       "Grace period (seconds)", 10, 99999, 1);
+			       "Combat grace period (seconds)", 10, 99999, 1);
 
 	obs_properties_add_bool(group_main, "fightrecorder_active", "Active");
-
 
 	obs_properties_add_group(props, "Main", "Main settings",
 				 OBS_GROUP_NORMAL, group_main);
 
-	//obs_properties_t *group_adv = obs_properties_create();
+	obs_properties_t *group_adv = obs_properties_create();
 	//obs_properties_add_text(group_adv, "fight_recorder_logs_regex",
 	//			"Log Regex", OBS_TEXT_DEFAULT);
 
@@ -66,8 +65,31 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 		advanced_plugin_property,
 		"Plugin options:\n\n   -i [n]\t Track game log files of the last n hours (Default n=24)\n");
 	*/
-	//obs_properties_add_group(props, "Advanced", "Advanced settings",
-	//			 OBS_GROUP_NORMAL, group_adv);
+	obs_properties_add_group(props, "Advanced", "Advanced settings",
+				 OBS_GROUP_NORMAL, group_adv);
+
+	
+	obs_property_t *group_replaybuffer = obs_properties_add_list(
+		group_adv, "Replay buffer", "Replay buffer",
+		OBS_COMBO_TYPE_RADIO, OBS_COMBO_FORMAT_BOOL);
+
+	obs_property_list_add_bool(group_replaybuffer,
+				   obs_module_text("Always on"),
+				   false);
+	obs_property_list_add_bool(group_replaybuffer,
+				   obs_module_text("Start/Stop based on Game logs"),
+				   true);
+
+	obs_property_t *timeout_property = obs_properties_add_int(
+		group_adv, "Replay buffer timeout", "Replay buffer timeout", 0,
+			       99999,
+			       1);
+
+	obs_property_set_enabled(timeout_property, false);
+
+	obs_property_set_modified_callback(group_replaybuffer,
+					   replay_buffer_settings_modified_cb);
+
 	
 	return props;
 }
@@ -410,6 +432,23 @@ void *dummy_source_create(obs_data_t *settings, obs_source_t *source)
 	dummy_source_update(fightrecorder_args, settings);
 
 	return fightrecorder_args;
+}
+
+
+bool replay_buffer_settings_modified_cb(obs_properties_t *props, obs_property_t *prop,
+			       obs_data_t *settings)
+{
+	UNUSED_PARAMETER(prop);
+
+	//bool from_file = obs_data_get_bool(settings, "from_file");
+
+	//obs_property_t *text = obs_properties_get(props, "text");
+	//obs_property_t *text_file = obs_properties_get(props, "text_file");
+
+	//obs_property_set_visible(text, !from_file);
+	//obs_property_set_visible(text_file, from_file);
+
+	return true;
 }
 
 
