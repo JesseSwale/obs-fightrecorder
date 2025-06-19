@@ -68,3 +68,4 @@ void *dummy_source_create(obs_data_t *settings, obs_source_t *source);
 void on_obs_frontend_event_exit();
 bool obs_module_load(void);
 void on_obs_frontend_event_finished_loading();
+bool replay_buffer_settings_modified_cb(obs_properties_t *props, obs_property_t *prop, obs_data_t *settings);
