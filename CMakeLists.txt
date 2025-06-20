@@ -17,16 +17,23 @@ project(${_name} VERSION ${_version})
 option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" OFF)
 option(ENABLE_QT "Use Qt functionality" OFF)
 
+
+
+# avformat-60.dll, avutil-58.dll
+set(DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.deps/obs-deps-2025-05-23-x64")
+set(FFMPEG_LIB_PATH "${DEPS_DIR}/lib")
+set(FFMPEG_INCLUDE_PATH "${DEPS_DIR}/include")
+
 include(compilerconfig)
 include(defaults)
 include(helpers)
 
 add_library(${CMAKE_PROJECT_NAME} MODULE)
 
-include_directories(${FFMPEG_INCLUDE_DIR})
-#target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE ${FFMPEG_LIB_DIR})
-
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE )
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE 
+    "${FFMPEG_LIB_PATH}/avformat.lib"
+    "${FFMPEG_LIB_PATH}/avutil.lib"
+    "${FFMPEG_LIB_PATH}/avcodec.lib")
 
 find_package(libobs REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
@@ -50,5 +57,8 @@ if(ENABLE_QT)
 endif()
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.c)
+
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_PATH})
+
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})
