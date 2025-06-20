@@ -19,6 +19,7 @@
 #include <pthread.h>
 
 #define MAX_LINE_LENGTH 1024
+#define MAX_PATH 260
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
@@ -40,6 +41,12 @@ typedef struct fightrecorder_data {
 	pthread_t thread_id;
 } fightrecorder_data_t;
 
+// The recording tuple
+typedef struct fightrecorder_rec {
+	const char *file_replaybuffer;
+	const char *file_recording;
+} fightrecorder_rec_t;
+
 typedef struct logfile {
 	char *file_path;
 	FILE *fp;
@@ -58,6 +65,7 @@ void add_logfile_if_not_exists(logfile_t **head, const char *file_path);
 void *monitor_file_and_control_recording(fightrecorder_data_t *arg);
 void start_observer_thread();
 void start_replaybuffer_if_active();
+void concat_recording_tuple();
 
 void obs_module_unload(void);
 const char *dummy_source_name(void *data);
