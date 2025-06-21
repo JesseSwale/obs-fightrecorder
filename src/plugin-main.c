@@ -44,6 +44,8 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 
 	obs_properties_t *group_main = obs_properties_create();
 
+	obs_properties_add_bool(group_main, "fightrecorder_active", "Enable Fight Recorder");
+
 	obs_properties_add_path(group_main, "fightrecorder_logs_dir",
 				"Game Logs Dir", OBS_PATH_DIRECTORY,
 				NULL, NULL);
@@ -51,8 +53,11 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 	obs_properties_add_int(group_main, "fightrecorder_grace_period",
 			       "Grace period (seconds)", 10, 99999, 1);
 
-	obs_properties_add_bool(group_main, "fightrecorder_active", "Active");
+	
+	obs_property_t *concat_property = obs_properties_add_bool(group_main, "fightrecorder_concat",
+				"Enable Concatenation ");
 
+	obs_property_set_long_description(concat_property, "Concatenates (merges) the replay buffer and the recording file in a single output file when the fight is over.\nThe original files are not deleted.");
 
 	obs_properties_add_group(props, "Main", "Main settings",
 				 OBS_GROUP_NORMAL, group_main);
@@ -369,7 +374,7 @@ void dummy_source_defaults(obs_data_t *settings)
 	obs_data_set_default_bool(settings, "fightrecorder_active", true);
 	//obs_data_set_default_bool(settings, "fightrecorder_delete", true);
 	obs_data_set_default_int(settings, "fightrecorder_grace_period", 120);
-	//obs_data_set_default_bool(settings, "fightrecorder_concat", true);
+	obs_data_set_default_bool(settings, "fightrecorder_concat", true);
 	//obs_data_set_default_string(settings, "fight_recorder_logs_regex", "\\(combat\\)|has applied bonuses to");
 	//obs_data_set_default_string(settings, "fight_recorder_advanced_options", "");
 
@@ -400,6 +405,7 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 	obs_log(LOG_DEBUG, "fightrecorder_logs_dir: %s", data->logs_dir);
 	// obs_log(LOG_DEBUG, "fight_recorder_logs_regex: %s", data->logs_regex);
 	obs_log(LOG_DEBUG, "fightrecorder_grace_period: %d", data->grace_period);
+	obs_log(LOG_DEBUG, "fightrecorder_concat: %d", data->concat);
 }
 
 
@@ -438,7 +444,7 @@ static void source_defaults_frontend_event_cb(enum obs_frontend_event event,
 			recording->file_replaybuffer = replay_output;
 		} else {
 			obs_log(LOG_WARNING,
-				"Replay buffer %s saved, but not part of Fight recorder, button pressed manually",
+				"Replay buffer %s saved, but not as part of Fight recorder, button pressed manually",
 				replay_output);
 		}
 		break;
@@ -452,12 +458,14 @@ static void source_defaults_frontend_event_cb(enum obs_frontend_event event,
 			recording->file_recording = recording_output;
 		} else {
 			obs_log(LOG_WARNING,
-				"Recording %s saved, but not part of Fight recorder, button pressed manually",
+				"Recording %s saved, but not as part of Fight recorder, button pressed manually",
 				recording_output);
 		}
 		fightrecorder->started_recording = false;
 
-		concat_recording_tuple();
+		if (fightrecorder->concat) {
+			concat_recording_tuple();
+		}
 		break;
 	}
 }
