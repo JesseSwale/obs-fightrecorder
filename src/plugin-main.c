@@ -27,6 +27,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
+#include <libavutil/frame.h>
 
 #include "plugin-main.h"
 
@@ -45,6 +46,8 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 
 	obs_properties_t *group_main = obs_properties_create();
 
+	obs_properties_add_bool(group_main, "fightrecorder_active", "Enable Fight Recorder");
+
 	obs_properties_add_path(group_main, "fightrecorder_logs_dir",
 				"Game Logs Dir", OBS_PATH_DIRECTORY,
 				NULL, NULL);
@@ -53,6 +56,12 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 			       "Combat grace period (seconds)", 10, 99999, 1);
 
 	obs_properties_add_bool(group_main, "fightrecorder_active", "Active");
+
+	
+	obs_property_t *concat_property = obs_properties_add_bool(group_main, "fightrecorder_concat",
+				"Enable Concatenation ");
+
+	obs_property_set_long_description(concat_property, "Concatenates (merges) the replay buffer and the recording file in a single output file when the fight is over.\nThe original files are not deleted.");
 
 	obs_properties_add_group(props, "Main", "Main settings",
 				 OBS_GROUP_NORMAL, group_main);
@@ -461,6 +470,7 @@ void dummy_source_defaults(obs_data_t *settings)
 	obs_data_set_default_bool(settings, "fightrecorder_active", true);
 	//obs_data_set_default_bool(settings, "fightrecorder_delete", true);
 	obs_data_set_default_int(settings, "fightrecorder_grace_period", 120);
+	obs_data_set_default_bool(settings, "fightrecorder_concat", true);
 	obs_data_set_default_bool(settings, "fightrecorder_replay_buffer_always_on", true);
 	//obs_data_set_default_bool(settings, "fightrecorder_concat", true);
 	//obs_data_set_default_string(settings, "fight_recorder_logs_regex", "\\(combat\\)|has applied bonuses to");
@@ -505,6 +515,7 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 	obs_log(LOG_DEBUG, "fightrecorder_grace_period: %d", data->grace_period);
 	obs_log(LOG_DEBUG, "fightrecorder_replay_buffer_always_on: %d",
 		data->replaybuffer_alwayson);
+	obs_log(LOG_DEBUG, "fightrecorder_concat: %d", data->concat);
 }
 
 
@@ -544,7 +555,7 @@ static void source_defaults_frontend_event_cb(enum obs_frontend_event event,
 			recording->file_replaybuffer = replay_output;
 		} else {
 			obs_log(LOG_WARNING,
-				"Replay buffer %s saved, but not part of Fight recorder, button pressed manually",
+				"Replay buffer %s saved, but not as part of Fight recorder, button pressed manually",
 				replay_output);
 		}
 		break;
@@ -558,12 +569,14 @@ static void source_defaults_frontend_event_cb(enum obs_frontend_event event,
 			recording->file_recording = recording_output;
 		} else {
 			obs_log(LOG_WARNING,
-				"Recording %s saved, but not part of Fight recorder, button pressed manually",
+				"Recording %s saved, but not as part of Fight recorder, button pressed manually",
 				recording_output);
 		}
 		fightrecorder->started_recording = false;
 
-		concat_recording_tuple();
+		if (fightrecorder->concat) {
+			concat_recording_tuple();
+		}
 		break;
 	}
 }
@@ -603,23 +616,23 @@ bool obs_module_load(void)
 	uint32_t version = avformat_version();
 	obs_log(LOG_INFO, "libavformat version: %u.%u.%u",
 	     (version >> 16) & 0xFF, (version >> 8) & 0xFF, version & 0xFF);
-
 	return true;
 }
 
 void concat_recording_tuple() {
-	AVFormatContext *i_fmt = NULL, *o_fmt = NULL;
-	int64_t last_pts[8] = {0};
-	int64_t last_dts[8] = {0};
-	int64_t max_pts[8] = {0};
-	int64_t max_dts[8] = {0};
+	AVFormatContext *out_ctx = NULL;
+	AVStream *out_streams[MAX_STREAMS] = {0};
+	int64_t pts_offset[MAX_STREAMS] = {0};
+	int stream_mapping[MAX_STREAMS] = {0};
+	int64_t max_dts[MAX_STREAMS] = {0};
+	int num_streams = 0;
+	char output_path[MAX_PATH];
 
 	if (!recording->file_replaybuffer || !recording->file_recording) {
 		obs_log(LOG_ERROR, "Replay buffer or recording is missing, can't concatenate.");
 		return;
 	}
 
-	char output_path[MAX_PATH];
 	strncpy(output_path, recording->file_recording, sizeof(output_path) -1);
 	output_path[MAX_PATH - 1] = '\0';
 
@@ -632,105 +645,92 @@ void concat_recording_tuple() {
 	}
 	strncat(output_filename, "_fight.mkv", sizeof(output_path) -1);
 
-	int ret;
-
-	avformat_open_input(&i_fmt, recording->file_replaybuffer, NULL, NULL);
-	avformat_find_stream_info(i_fmt, NULL);
-
-	avformat_alloc_output_context2(&o_fmt, NULL, NULL, output_filename);
-
-	for (unsigned int i = 0; i < i_fmt->nb_streams; i++) {
-		AVStream *in_stream = i_fmt->streams[i];
-		AVStream *out_stream = avformat_new_stream(o_fmt, NULL);
-		avcodec_parameters_copy(out_stream->codecpar,
-					in_stream->codecpar);
-		out_stream->time_base = in_stream->time_base;
+	// Open output context
+	avformat_alloc_output_context2(&out_ctx, NULL, NULL, output_path);
+	if (!out_ctx) {
+		fprintf(stderr, "Could not create output context\n");
+		return;
 	}
 
-	avio_open(&o_fmt->pb, output_filename, AVIO_FLAG_WRITE);
-	avformat_write_header(o_fmt, NULL);
-	avformat_close_input(&i_fmt); 
-
-	for (int file_i = 1; file_i <= 2; file_i++) {
-		const char *input_file = (file_i == 1)
-						 ? recording->file_replaybuffer
-						 : recording->file_recording;
-		ret = avformat_open_input(&i_fmt, input_file, NULL, NULL);
-		if (ret < 0) {
-			obs_log(LOG_ERROR, "Failed to open input file %d",
-				file_i);
-			continue;
+	for (int i = 1; i <= 2; i++) {
+		AVFormatContext *in_ctx = NULL;
+		if (avformat_open_input(&in_ctx, i == 1 ? recording->file_replaybuffer : recording->file_recording, NULL, NULL) < 0 ||
+		    avformat_find_stream_info(in_ctx, NULL) < 0) {
+			obs_log(LOG_ERROR, "Failed to open input \n");
+			return;
 		}
-		avformat_find_stream_info(i_fmt, NULL);
+
+		if (i == 1) {
+			// We may have n output streams (video is 0, rest might be audio)
+			for (unsigned int j = 0; j < in_ctx->nb_streams && num_streams < MAX_STREAMS; j++) {
+				AVStream *in_stream = in_ctx->streams[j];
+				AVStream *out_stream = avformat_new_stream(out_ctx, NULL);
+				avcodec_parameters_copy(out_stream->codecpar, in_stream->codecpar);
+				out_stream->time_base = in_stream->time_base;
+				stream_mapping[j] = num_streams;
+				out_streams[num_streams++] = out_stream;
+			}
+
+			if (!(out_ctx->oformat->flags & AVFMT_NOFILE)) {
+				if (avio_open(&out_ctx->pb, output_path,
+					      AVIO_FLAG_WRITE) < 0) {
+					obs_log(LOG_ERROR, "Failed to open output file");
+					return;
+				}
+			}
+			avformat_write_header(out_ctx, NULL);
+		}
 
 		AVPacket pkt;
-		memset(&pkt, 0, sizeof(pkt));
-
-		// Replay file sometimes has weird timestamp values at the start, skip those
-		// AV_NOPTS_VALUE values or you encounter grey things in the
-		// concatenated recording
-		if (file_i == 2) {
-			while ((ret = av_read_frame(i_fmt, &pkt)) >= 0) {
-				if (pkt.pts != AV_NOPTS_VALUE &&
-				    pkt.dts != AV_NOPTS_VALUE)
-					break;
+		while (av_read_frame(in_ctx, &pkt) >= 0) {
+			if (pkt.stream_index >= MAX_STREAMS || stream_mapping[pkt.stream_index] == -1) {
 				av_packet_unref(&pkt);
-			}
-			if (ret < 0) {
-				obs_log(LOG_DEBUG, "No valid PTS/DTS packet found in file 2.");
-				avformat_close_input(&i_fmt);
 				continue;
 			}
-		}
-
-		do {
-			int stream_index = pkt.stream_index;
-			AVStream *in_stream = i_fmt->streams[stream_index];
-			AVStream *out_stream = o_fmt->streams[stream_index];
-
-			obs_log(LOG_DEBUG,
-				"file %d stream %d: pts=%" PRId64
-				", dts=%" PRId64,
-				file_i, stream_index, pkt.pts, pkt.dts);
-
-			if (pkt.pts != AV_NOPTS_VALUE) {
-				pkt.pts = av_rescale_q(pkt.pts,
-						       in_stream->time_base,
-						       out_stream->time_base) +
-					  last_pts[stream_index];
-				if (pkt.pts > max_pts[stream_index])
-					max_pts[stream_index] = pkt.pts;
-			}
-			if (pkt.dts != AV_NOPTS_VALUE) {
-				pkt.dts = av_rescale_q(pkt.dts,
-						       in_stream->time_base,
-						       out_stream->time_base) +
-					  last_dts[stream_index];
-				if (pkt.dts > max_dts[stream_index])
-					max_dts[stream_index] = pkt.dts;
+			int out_idx = stream_mapping[pkt.stream_index];
+			AVStream *in_stream = in_ctx->streams[pkt.stream_index];
+			AVStream *out_stream = out_streams[out_idx];
+			
+			if (pkt.dts > max_dts[out_idx]) {
+				max_dts[out_idx] = pkt.dts;
 			}
 
+			if (out_stream == NULL) {
+				obs_log(LOG_ERROR,
+					"Out stream is null, something went wrong");
+				return;
+			}
+
+			pkt.pts = av_rescale_q(pkt.pts, in_stream->time_base,
+					       out_stream->time_base);
+			pkt.dts = av_rescale_q(pkt.dts, in_stream->time_base,
+					       out_stream->time_base);
 			pkt.duration = av_rescale_q(pkt.duration,
 						    in_stream->time_base,
 						    out_stream->time_base);
+
+			pkt.pts += pts_offset[out_idx];
+			pkt.dts += pts_offset[out_idx];
+
+			if (pkt.dts > max_dts[out_idx]) {
+				max_dts[out_idx] = pkt.dts;
+			}
+
 			pkt.pos = -1;
+			pkt.stream_index = out_idx;
 
-			av_interleaved_write_frame(o_fmt, &pkt);
+			av_interleaved_write_frame(out_ctx, &pkt);
 			av_packet_unref(&pkt);
-		} while ((ret = av_read_frame(i_fmt, &pkt)) >= 0);
-
-
-		for (unsigned int i = 0; i < i_fmt->nb_streams; i++) {
-			last_pts[i] = max_pts[i] + 1;
-			last_dts[i] = max_dts[i] + 1;
 		}
-
-		avformat_close_input(&i_fmt);
+		for (int j = 0; j < num_streams; j++) {
+			pts_offset[j] = max_dts[j] + 1;
+		}
+		avformat_close_input(&in_ctx);
 	}
 
-	av_write_trailer(o_fmt);
-	avio_closep(&o_fmt->pb);
-	avformat_free_context(o_fmt);
+	av_write_trailer(out_ctx);
+	avio_closep(&out_ctx->pb);
+	avformat_free_context(out_ctx);
 }
 
 
