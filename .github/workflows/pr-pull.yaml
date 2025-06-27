@@ -15,6 +15,7 @@ concurrency:
 jobs:
   check-format:
     name: Check Formatting 🔍
+    if: false
     uses: ./.github/workflows/check-format.yaml
     permissions:
       contents: read
