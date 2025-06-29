@@ -25,7 +25,14 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <util/threading.h>
 #include <graphics/graphics.h>
 
+#ifdef _WIN32
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX  
+	#include <windows.h>
+#endif
+
 #include "plugin-main.h"
+
 
 obs_source_t *fightrecorder_source = NULL;
 fightrecorder_data_t *fightrecorder = NULL;
@@ -70,22 +77,16 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 
 	
 	obs_property_t *group_replaybuffer = obs_properties_add_list(
-		group_adv, "Replay buffer", "Replay buffer",
+		group_adv, "replay_buffer_always_on", "Replay buffer",
 		OBS_COMBO_TYPE_RADIO, OBS_COMBO_FORMAT_BOOL);
 
 	obs_property_list_add_bool(group_replaybuffer,
 				   obs_module_text("Always on"),
-				   false);
-	obs_property_list_add_bool(group_replaybuffer,
-				   obs_module_text("Start/Stop based on Game logs"),
 				   true);
+	obs_property_list_add_bool(group_replaybuffer,
+				   obs_module_text("Start/Stop based on active Eve clients"),
+				   false);
 
-	obs_property_t *timeout_property = obs_properties_add_int(
-		group_adv, "Replay buffer timeout", "Replay buffer timeout", 0,
-			       99999,
-			       1);
-
-	obs_property_set_enabled(timeout_property, false);
 
 	obs_property_set_modified_callback(group_replaybuffer,
 					   replay_buffer_settings_modified_cb);
@@ -438,8 +439,11 @@ void *dummy_source_create(obs_data_t *settings, obs_source_t *source)
 bool replay_buffer_settings_modified_cb(obs_properties_t *props, obs_property_t *prop,
 			       obs_data_t *settings)
 {
-	UNUSED_PARAMETER(prop);
-
+	//UNUSED_PARAMETER(prop);
+	bool replay_buffer_enabled =
+		obs_data_get_bool(settings, "replay_buffer_always_on");
+	obs_log(LOG_INFO, "is always on? %s",
+		replay_buffer_enabled ? "yes" : "no");
 	//bool from_file = obs_data_get_bool(settings, "from_file");
 
 	//obs_property_t *text = obs_properties_get(props, "text");
