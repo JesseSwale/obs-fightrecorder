@@ -60,24 +60,13 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 				 OBS_GROUP_NORMAL, group_main);
 
 	obs_properties_t *group_adv = obs_properties_create();
-	//obs_properties_add_text(group_adv, "fight_recorder_logs_regex",
-	//			"Log Regex", OBS_TEXT_DEFAULT);
 
-	/*
-	obs_property_t *advanced_plugin_property = obs_properties_add_text(group_adv, "fight_recorder_advanced_options",
-				"Plugin options", OBS_TEXT_DEFAULT);
-	*/
-	/*
-	obs_property_set_long_description(
-		advanced_plugin_property,
-		"Plugin options:\n\n   -i [n]\t Track game log files of the last n hours (Default n=24)\n");
-	*/
 	obs_properties_add_group(props, "Advanced", "Advanced settings",
 				 OBS_GROUP_NORMAL, group_adv);
 
 	
 	obs_property_t *group_replaybuffer = obs_properties_add_list(
-		group_adv, "replay_buffer_always_on", "Replay buffer",
+		group_adv, "fightrecorder_replay_buffer_always_on", "Replay buffer",
 		OBS_COMBO_TYPE_RADIO, OBS_COMBO_FORMAT_BOOL);
 
 	obs_property_list_add_bool(group_replaybuffer,
@@ -86,11 +75,6 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 	obs_property_list_add_bool(group_replaybuffer,
 				   obs_module_text("Start/Stop based on active Eve clients"),
 				   false);
-
-
-	obs_property_set_modified_callback(group_replaybuffer,
-					   replay_buffer_settings_modified_cb);
-
 	
 	return props;
 }
@@ -213,11 +197,31 @@ void add_logfile_if_not_exists(logfile_t **head, const char *file_path)
 	}
 }
 
+#if _WIN32
+BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
+{
+	char title[512];
+
+	if (IsWindowVisible(hwnd) &&
+	    GetWindowTextA(hwnd, title, sizeof(title) / sizeof(WCHAR)) > 0) {
+		
+		if (strstr(title, "EVE - ") != NULL) {
+			fightrecorder->active_eve_clients = true;
+		}
+	}
+
+	return TRUE;
+}
+#endif
+
 void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 {
 	int sleep = 1000;
 	int update_files_sleep = 30000;
+	int active_windows_sleep = 30000;
 	int update_files_iter = 30000;
+	int replaybuffer_timeout = 0;
+	
 	time_t end_recording_time = time(NULL);
 	logfile_t *head = NULL;
 	logfile_t *curr = head;
@@ -236,6 +240,39 @@ void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 		if (!fightrecorder->active) {
 			break;
 		}
+
+#if _WIN32
+		if (!fightrecorder->replaybuffer_alwayson) {
+			if (update_files_iter >= update_files_sleep) {
+				fightrecorder->active_eve_clients = false;
+				EnumWindows(EnumWindowsProc, 0);
+				// if active_eve_clients are still false here we know there are no active Eve clients
+				if (fightrecorder->active_eve_clients) {
+					if (obs_frontend_replay_buffer_active()) {  // Eve clients, and active replay buffer
+						replaybuffer_timeout = 0;
+					} 
+					else { // Eve clients and no active replay buffer
+						obs_log(LOG_DEBUG,
+							"Active Eve clients, but replay buffer is stopped, starting now.");
+						obs_frontend_replay_buffer_start();
+						replaybuffer_timeout = 0;
+					}
+				} else {
+					if (obs_frontend_replay_buffer_active()) { // No Eve clients and active replay buffer
+						if (replaybuffer_timeout >= 5) {
+							obs_log(LOG_DEBUG,
+								"No active Eve clients, stopping replay buffer");
+							obs_frontend_replay_buffer_stop();
+							replaybuffer_timeout =
+								0;
+						} else {
+							++replaybuffer_timeout;
+						}
+					} 
+				}
+			}
+		}
+#endif
 
 		// ~30s check for new files
 		if (update_files_iter >= update_files_sleep) {
@@ -329,7 +366,7 @@ void start_observer_thread()
 
 void start_replaybuffer_if_active()
 {
-	if (fightrecorder->active) {
+	if (fightrecorder->active && fightrecorder->replaybuffer_alwayson) {
 		if (!obs_frontend_replay_buffer_active()) {
 			obs_frontend_replay_buffer_start();
 		}
@@ -388,6 +425,7 @@ void dummy_source_defaults(obs_data_t *settings)
 	obs_data_set_default_bool(settings, "fightrecorder_active", true);
 	//obs_data_set_default_bool(settings, "fightrecorder_delete", true);
 	obs_data_set_default_int(settings, "fightrecorder_grace_period", 120);
+	obs_data_set_default_bool(settings, "fightrecorder_replay_buffer_always_on", true);
 	//obs_data_set_default_bool(settings, "fightrecorder_concat", true);
 	//obs_data_set_default_string(settings, "fight_recorder_logs_regex", "\\(combat\\)|has applied bonuses to");
 	//obs_data_set_default_string(settings, "fight_recorder_advanced_options", "");
@@ -409,6 +447,10 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 	data->grace_period = obs_data_get_int(settings, "fightrecorder_grace_period");
 	data->adv_options = obs_data_get_string(settings, "fight_recorder_advanced_options");
 
+	bool replay_buffer_alwayson =
+		obs_data_get_bool(settings, "fightrecorder_replay_buffer_always_on");
+	data->replaybuffer_alwayson = replay_buffer_alwayson;
+
 	if (!active_past && data->active) {
 		obs_log(LOG_DEBUG, "fightrecorder_active [false -> true]");
 		start_observer_thread();
@@ -421,6 +463,8 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 	obs_log(LOG_DEBUG, "fightrecorder_logs_dir: %s", data->logs_dir);
 	// obs_log(LOG_DEBUG, "fight_recorder_logs_regex: %s", data->logs_regex);
 	obs_log(LOG_DEBUG, "fightrecorder_grace_period: %d", data->grace_period);
+	obs_log(LOG_DEBUG, "fightrecorder_replay_buffer_always_on: %d",
+		data->replaybuffer_alwayson);
 }
 
 
@@ -433,26 +477,6 @@ void *dummy_source_create(obs_data_t *settings, obs_source_t *source)
 	dummy_source_update(fightrecorder_args, settings);
 
 	return fightrecorder_args;
-}
-
-
-bool replay_buffer_settings_modified_cb(obs_properties_t *props, obs_property_t *prop,
-			       obs_data_t *settings)
-{
-	//UNUSED_PARAMETER(prop);
-	bool replay_buffer_enabled =
-		obs_data_get_bool(settings, "replay_buffer_always_on");
-	obs_log(LOG_INFO, "is always on? %s",
-		replay_buffer_enabled ? "yes" : "no");
-	//bool from_file = obs_data_get_bool(settings, "from_file");
-
-	//obs_property_t *text = obs_properties_get(props, "text");
-	//obs_property_t *text_file = obs_properties_get(props, "text_file");
-
-	//obs_property_set_visible(text, !from_file);
-	//obs_property_set_visible(text_file, from_file);
-
-	return true;
 }
 
 
