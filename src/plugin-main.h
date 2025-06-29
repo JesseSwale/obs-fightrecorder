@@ -31,6 +31,7 @@ typedef struct fightrecorder_data {
 	bool active;
 	bool concatdelete;
 	bool concat;
+	bool replaybuffer_alwayson;
 	const char *logs_dir;
 	const char *logs_regex;
 	const char *output_dir;
@@ -39,6 +40,7 @@ typedef struct fightrecorder_data {
 
 	// state
 	bool started_recording;
+	bool active_eve_clients; // only used when replaybuffer_alwayson = false
 	pthread_t thread_id;
 } fightrecorder_data_t;
 
@@ -77,4 +79,3 @@ void *dummy_source_create(obs_data_t *settings, obs_source_t *source);
 void on_obs_frontend_event_exit();
 bool obs_module_load(void);
 void on_obs_frontend_event_finished_loading();
-bool replay_buffer_settings_modified_cb(obs_properties_t *props, obs_property_t *prop, obs_data_t *settings);
