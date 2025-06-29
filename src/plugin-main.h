@@ -29,6 +29,7 @@ typedef struct fightrecorder_data {
 	bool active;
 	bool concatdelete;
 	bool concat;
+	bool replaybuffer_alwayson;
 	const char *logs_dir;
 	const char *logs_regex;
 	const char *output_dir;
@@ -37,6 +38,7 @@ typedef struct fightrecorder_data {
 
 	// state
 	bool started_recording;
+	bool active_eve_clients; // only used when replaybuffer_alwayson = false
 	pthread_t thread_id;
 } fightrecorder_data_t;
 
