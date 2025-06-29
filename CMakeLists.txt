@@ -5,6 +5,16 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/common/bootstrap.cmake" NO_POLICY_SCO
 
 project(${_name} VERSION ${_version})
 
+
+#if(WIN32)
+#    set(WIN_SDK_INCLUDE_DIR "C:/Program Files (x86)/Windows Kits/10/Include/${CMAKE_SYSTEM_VERSION}")
+#    include_directories(
+#        "${WIN_SDK_INCLUDE_DIR}/um"
+#        "${WIN_SDK_INCLUDE_DIR}/shared"
+#        "${WIN_SDK_INCLUDE_DIR}/ucrt"
+#    )
+#endif()
+
 option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" OFF)
 option(ENABLE_QT "Use Qt functionality" OFF)
 
