@@ -1,22 +1,26 @@
 #pragma once
 
 #if defined(_WIN32) || defined(_WIN64)
-#define FILE_SEPARATOR "\\"
-#define HOME_DIR "UserProfile"
+	#define WIN32_LEAN_AND_MEAN
+	#define NOMINMAX
+	#define FILE_SEPARATOR "\\"
+	#define HOME_DIR "UserProfile"
+	#include <windows.h>
 #else
-#define FILE_SEPARATOR "/"
-#define HOME_DIR "HOME"
+	#define FILE_SEPARATOR "/"
+	#define HOME_DIR "HOME"
 #endif
 
 #if _MSC_VER
-#define __popen _popen
-#define __pclose _pclose
+	#define __popen _popen
+	#define __pclose _pclose
 #else
-#define __popen popen
-#define __pclose pclose
+	#define __popen popen
+	#define __pclose pclose
 #endif
 
 #include <pthread.h>
+
 
 #define MAX_LINE_LENGTH 1024
 #define MAX_PATH 260
@@ -41,6 +45,8 @@ typedef struct fightrecorder_data {
 	// state
 	bool started_recording;
 	bool active_eve_clients; // only used when replaybuffer_alwayson = false
+	pthread_mutex_t pthread_shutdown_lock; // mutex for bool pthread_shutdown
+	bool pthread_shutdown;
 	pthread_t thread_id;
 } fightrecorder_data_t;
 
@@ -66,7 +72,9 @@ void free_logfiles(logfile_t *head);
 logfile_t *create_logfile_node(const char *file_path);
 void add_logfile_if_not_exists(logfile_t **head, const char *file_path);
 void *monitor_file_and_control_recording(fightrecorder_data_t *arg);
+bool observer_thread_needs_shutdown();
 void start_observer_thread();
+void stop_observer_thread();
 void start_replaybuffer_if_active();
 void concat_recording_tuple();
 
@@ -79,3 +87,8 @@ void *dummy_source_create(obs_data_t *settings, obs_source_t *source);
 void on_obs_frontend_event_exit();
 bool obs_module_load(void);
 void on_obs_frontend_event_finished_loading();
+
+#ifdef _WIN32
+	BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam);
+#endif
+
