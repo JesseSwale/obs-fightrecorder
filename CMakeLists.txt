@@ -14,6 +14,8 @@ project(${_name} VERSION ${_version})
 #    )
 #endif()
 
+
+
 option(ENABLE_FRONTEND_API "Use obs-frontend-api for UI functionality" OFF)
 option(ENABLE_QT "Use Qt functionality" OFF)
 

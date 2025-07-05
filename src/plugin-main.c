@@ -25,12 +25,6 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <util/threading.h>
 #include <graphics/graphics.h>
 
-#ifdef _WIN32
-	#define WIN32_LEAN_AND_MEAN
-	#define NOMINMAX  
-	#include <windows.h>
-#endif
-
 #include "plugin-main.h"
 
 
@@ -197,7 +191,7 @@ void add_logfile_if_not_exists(logfile_t **head, const char *file_path)
 	}
 }
 
-#if _WIN32
+#ifdef _WIN32
 BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
 {
 	char title[512];
@@ -213,6 +207,13 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
 	return TRUE;
 }
 #endif
+
+bool observer_thread_needs_shutdown() {
+	pthread_mutex_lock(&fightrecorder->pthread_shutdown_lock);
+	bool result = fightrecorder->pthread_shutdown;
+	pthread_mutex_unlock(&fightrecorder->pthread_shutdown_lock);
+	return result;
+}
 
 void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 {
@@ -236,12 +237,12 @@ void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 		return NULL;
 	}
 
-	while (true) {
+	while (!observer_thread_needs_shutdown()) {
 		if (!fightrecorder->active) {
 			break;
 		}
 
-#if _WIN32
+#ifdef _WIN32
 		if (!fightrecorder->replaybuffer_alwayson) {
 			if (update_files_iter >= update_files_sleep) {
 				fightrecorder->active_eve_clients = false;
@@ -364,6 +365,16 @@ void start_observer_thread()
 	obs_log(LOG_INFO, "Observer thread started");
 }
 
+void stop_observer_thread() 
+{
+	pthread_mutex_lock(&fightrecorder->pthread_shutdown_lock);
+	fightrecorder->pthread_shutdown = true;
+	obs_log(LOG_DEBUG, "Set pthread_shutdown=true");
+	pthread_mutex_unlock(&fightrecorder->pthread_shutdown_lock);
+	pthread_join(fightrecorder->thread_id, NULL);
+	obs_log(LOG_DEBUG, "pthread_join successful");
+}
+
 void start_replaybuffer_if_active()
 {
 	if (fightrecorder->active && fightrecorder->replaybuffer_alwayson) {
@@ -375,6 +386,9 @@ void start_replaybuffer_if_active()
 
 void obs_module_unload(void)
 {
+	stop_observer_thread();
+	pthread_mutex_destroy(&fightrecorder->pthread_shutdown_lock);
+
 	obs_log(LOG_INFO, "Plugin unloaded");
 }
 
@@ -474,6 +488,7 @@ void *dummy_source_create(obs_data_t *settings, obs_source_t *source)
 	fightrecorder_data_t *fightrecorder_args = bzalloc(sizeof(struct fightrecorder_data));
 	fightrecorder = fightrecorder_args;
 
+	pthread_mutex_init(&fightrecorder->pthread_shutdown_lock, NULL);
 	dummy_source_update(fightrecorder_args, settings);
 
 	return fightrecorder_args;
