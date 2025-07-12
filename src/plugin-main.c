@@ -130,31 +130,36 @@ bool check_file(FILE *file, const char *word, long *position)
 
 
 void free_logfiles(logfile_t *head) {
-	logfile_t *tmp;
+	logfile_t *current = head;
+	while (current != NULL) {
+		logfile_t *next = current->next;
 
-	while (head != NULL) {
-		tmp = head;
-		head = head->next;
-		bfree(tmp->file_path);
-		bfree(tmp);
+		if (current->fp) {
+			fclose(current->fp);
+		}
+		if (current->file_path) {
+			bfree(current->file_path);
+		}
+		bfree(current);
+		current = next;
 	}
 }
 
 logfile_t *create_logfile_node(const char *file_path)
 {
 	logfile_t *node = bzalloc(sizeof(logfile_t));
+
 	if (node == NULL) {
 		obs_log(LOG_ERROR, "error bzalloc");
 		return NULL;
 	}
 
-	node->file_path = strdup(file_path);
+	node->file_path = bstrdup(file_path);
 	node->fp = fopen(node->file_path, "r");
+
 	fseek(node->fp, 0, SEEK_END);
-	obs_log(LOG_DEBUG, "%s ftell to %d", file_path, "end");
-
-
 	node->file_position = os_ftelli64(node->fp);
+
 	node->next = NULL;
 	return node;
 }
@@ -248,8 +253,10 @@ void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 		return NULL;
 	}
 
-	while (!observer_thread_needs_shutdown()) {
-		if (!fightrecorder->active) {
+	while (true) {
+		if (observer_thread_needs_shutdown()) {
+			obs_log(LOG_DEBUG,
+				"shutdown flag is set; Exiting observer thread");
 			break;
 		}
 
@@ -365,12 +372,19 @@ void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
 		update_files_iter += sleep;
 	}
 
+	obs_log(LOG_DEBUG, "Freeing logfiles");
+	free_logfiles(head);
+
 	obs_log(LOG_INFO, "Observer thread stopped gracefully");
 	return NULL;
 }
 
 void start_observer_thread()
 {
+	pthread_mutex_lock(&fightrecorder->pthread_shutdown_lock);
+	fightrecorder->pthread_shutdown = false;
+	pthread_mutex_unlock(&fightrecorder->pthread_shutdown_lock);
+
 	pthread_create(&fightrecorder->thread_id, NULL,
 		       monitor_file_and_control_recording, fightrecorder);
 	obs_log(LOG_INFO, "Observer thread started");
@@ -382,8 +396,8 @@ void stop_observer_thread()
 	fightrecorder->pthread_shutdown = true;
 	obs_log(LOG_DEBUG, "Set pthread_shutdown=true");
 	pthread_mutex_unlock(&fightrecorder->pthread_shutdown_lock);
-	pthread_join(fightrecorder->thread_id, NULL);
-	obs_log(LOG_DEBUG, "pthread_join successful");
+	int x = pthread_join(fightrecorder->thread_id, NULL);
+	obs_log(LOG_DEBUG, "pthread_join exit code=%d", x);
 }
 
 void start_replaybuffer_if_active()
@@ -397,9 +411,15 @@ void start_replaybuffer_if_active()
 
 void obs_module_unload(void)
 {
+	obs_log(LOG_INFO, "Plugin unload start");
 	stop_observer_thread();
 	pthread_mutex_destroy(&fightrecorder->pthread_shutdown_lock);
 
+	bfree(fightrecorder->adv_options);
+	bfree(fightrecorder->logs_dir);
+	bfree(fightrecorder->logs_regex);
+	bfree(fightrecorder->output_dir);
+	bfree(fightrecorder);
 	obs_log(LOG_INFO, "Plugin unloaded");
 }
 
@@ -412,8 +432,6 @@ const char* dummy_source_name(void *data)
 void dummy_source_destroy(void *data)
 {
 	UNUSED_PARAMETER(data);
-	bfree(fightrecorder);
-	bfree(recording);
 }
 
 void dummy_source_defaults(obs_data_t *settings)
@@ -429,24 +447,22 @@ void dummy_source_defaults(obs_data_t *settings)
 	obs_data_set_default_string(settings, "fightrecorder_logs_dir",
 				    default_path_logs);
 
-	config_t* profile_config = obs_frontend_get_profile_config();
+	//config_t* profile_config = obs_frontend_get_profile_config();
 
 	// Load useful default values depending on the current profile
-	if (strcmp(config_get_string(profile_config, "Output", "Mode"),
-		   "Advanced") == 0)
-	{
-		obs_data_set_default_string(
-			settings, "fightrecorder_output_dir",
-			config_get_string(profile_config, "AdvOut",
-					  "RecFilePath"));
-	}
-	else
-	{
-		obs_data_set_default_string(
-			settings, "fightrecorder_output_dir",
-			config_get_string(profile_config, "SimpleOutput",
-					  "FilePath"));
-	}
+	//char *output_mode = config_get_string(profile_config, "Output", "Mode");
+	//char *rec_file_path =  config_get_string(profile_config, "AdvOut", "RecFilePath");
+	//if (strcmp(output_mode, "Advanced") == 0)
+	//{
+	//	obs_data_set_default_string(settings, "fightrecorder_output_dir", rec_file_path);
+	//}
+	//else
+	//{
+	//	obs_data_set_default_string(
+	//		settings, "fightrecorder_output_dir",
+	//		config_get_string(profile_config, "SimpleOutput",
+	//				  "FilePath"));
+	//}
 
 	obs_data_set_default_bool(settings, "fightrecorder_active", true);
 	//obs_data_set_default_bool(settings, "fightrecorder_delete", true);
@@ -466,11 +482,16 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 	data->active = obs_data_get_bool(settings, "fightrecorder_active");
 	data->concatdelete = obs_data_get_bool(settings, "fightrecorder_delete");
 	data->concat = obs_data_get_bool(settings, "fightrecorder_concat");
-	data->logs_dir = obs_data_get_string(settings, "fightrecorder_logs_dir");
-	data->logs_regex = obs_data_get_string(settings, "fight_recorder_logs_regex");
-	data->output_dir = obs_data_get_string(settings, "fightrecorder_output_dir");
+	bfree(data->logs_dir);
+	data->logs_dir = bstrdup(obs_data_get_string(settings, "fightrecorder_logs_dir"));
+	bfree(data->logs_regex);
+	data->logs_regex = bstrdup(obs_data_get_string(
+		settings, "fight_recorder_logs_regex"));
+	//data->output_dir = obs_data_get_string(settings, "fightrecorder_output_dir");
 	data->grace_period = obs_data_get_int(settings, "fightrecorder_grace_period");
-	data->adv_options = obs_data_get_string(settings, "fight_recorder_advanced_options");
+	bfree(data->adv_options);
+	data->adv_options = bstrdup(obs_data_get_string(
+		settings, "fight_recorder_advanced_options"));
 
 	bool replay_buffer_alwayson =
 		obs_data_get_bool(settings, "fightrecorder_replay_buffer_always_on");
@@ -484,6 +505,7 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 	else if (active_past && !data->active) {
 		obs_log(LOG_DEBUG, "fightrecorder_active [true -> false]");
 		obs_log(LOG_DEBUG, "Observer thread should stop anytime now...");
+		stop_observer_thread();
 	}
 	obs_log(LOG_DEBUG, "fightrecorder_logs_dir: %s", data->logs_dir);
 	// obs_log(LOG_DEBUG, "fight_recorder_logs_regex: %s", data->logs_regex);
@@ -562,8 +584,8 @@ void on_obs_frontend_event_exit()
 	obs_data_t *settings = obs_source_get_settings(fightrecorder_source);
 	obs_data_save_json(settings, json_path);
 	obs_data_release(settings);
-	bfree(json_path);
 
+	bfree(json_path);
 	obs_source_release(fightrecorder_source);
 }
 
@@ -743,6 +765,11 @@ void on_obs_frontend_event_finished_loading()
 		"fightrecorder-source", "Fightrecorder",
 				  settings,
 				  NULL);
+
+	bfree(json_path);
+	bfree(plugin_path);
+
+	obs_data_release(settings);
 
 	obs_frontend_add_tools_menu_item(obs_module_text("Fight Recorder"),
 					 open_fightrecorder_settings, NULL);

@@ -36,11 +36,11 @@ typedef struct fightrecorder_data {
 	bool concatdelete;
 	bool concat;
 	bool replaybuffer_alwayson;
-	const char *logs_dir;
-	const char *logs_regex;
-	const char *output_dir;
+	char *logs_dir;
+	char *logs_regex;
+	char *output_dir;
 	__int64 grace_period;
-	const char *adv_options;
+	char *adv_options;
 
 	// state
 	bool started_recording;
