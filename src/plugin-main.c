@@ -506,6 +506,7 @@ bool obs_module_load(void)
 	uint32_t version = avformat_version();
 	obs_log(LOG_INFO, "libavformat version: %u.%u.%u",
 	     (version >> 16) & 0xFF, (version >> 8) & 0xFF, version & 0xFF);
+
 	return true;
 }
 
@@ -515,25 +516,41 @@ void concat_recording_tuple() {
 	int64_t pts_offset[MAX_STREAMS] = {0};
 	int stream_mapping[MAX_STREAMS] = {0};
 	int64_t max_dts[MAX_STREAMS] = {0};
+	int64_t max_pts[MAX_STREAMS] = {0};
 	int num_streams = 0;
 	char output_path[MAX_PATH];
+	char folder[MAX_PATH];
+	char filename[MAX_PATH];
 
 	if (!recording->file_replaybuffer || !recording->file_recording) {
 		obs_log(LOG_ERROR, "Replay buffer or recording is missing, can't concatenate.");
 		return;
 	}
 
-	strncpy(output_path, recording->file_recording, sizeof(output_path) -1);
+	// Make the output filename 
+	// /some/path/to/2025-07-12 21-16-41.mkv -> /some/path/to/Fight 2025-07-12 21-16-41.mkv
+	strncpy(output_path, recording->file_recording, MAX_PATH - 1);
 	output_path[MAX_PATH - 1] = '\0';
 
 	char *last_backslash = strrchr(output_path, '\\');
-	char *output_filename = last_backslash ? last_backslash + 1 : output_path;
-
-	char *dot = strrchr(output_filename, '.');
-	if (dot && strcmp(dot, ".mkv") == 0) {
-		*dot = '\0';
+	if (!last_backslash) {
+		obs_log(LOG_ERROR, "Invalid path (no backslash): %s",
+			output_path);
+		return;
 	}
-	strncat(output_filename, "_fight.mkv", sizeof(output_path) -1);
+
+	// Folder might come  from a config sometime later
+	size_t folder_length = last_backslash - output_path;
+	if (folder_length >= MAX_PATH)
+		folder_length = MAX_PATH - 1;
+	strncpy(folder, output_path, folder_length);
+	folder[folder_length] = '\0';
+
+	strncpy(filename, last_backslash + 1, MAX_PATH - 1);
+	filename[MAX_PATH - 1] = '\0';
+
+	snprintf(output_path, MAX_PATH, "%s%sFight %s", folder, FILE_SEPARATOR,
+		 filename);
 
 	// Open output context
 	avformat_alloc_output_context2(&out_ctx, NULL, NULL, output_path);
@@ -584,6 +601,9 @@ void concat_recording_tuple() {
 			if (pkt.dts > max_dts[out_idx]) {
 				max_dts[out_idx] = pkt.dts;
 			}
+			if (pkt.pts > max_pts[out_idx]) {
+				max_pts[out_idx] = pkt.pts;
+			}
 
 			if (out_stream == NULL) {
 				obs_log(LOG_ERROR,
@@ -613,7 +633,7 @@ void concat_recording_tuple() {
 			av_packet_unref(&pkt);
 		}
 		for (int j = 0; j < num_streams; j++) {
-			pts_offset[j] = max_dts[j] + 1;
+			pts_offset[j] = FFMAX(max_pts[j], max_dts[j]) + 1;
 		}
 		avformat_close_input(&in_ctx);
 	}
