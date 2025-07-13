@@ -58,7 +58,7 @@
       "architecture": "x64",
       "warnings": {"dev": true, "deprecated": true},
       "cacheVariables": {
-        "CMAKE_SYSTEM_VERSION": "10.0.18363.657",
+        "CMAKE_SYSTEM_VERSION": "10.0.22621.0",
         "ENABLE_FRONTEND_API": true,
         "CMAKE_INCLUDE_PATH": "${sourceDir}/.deps/obs-deps-2025-05-23-x64/include",
         "CMAKE_LIBRARY_PATH": "${sourceDir}/.deps/obs-deps-2025-05-23-x64/lib"
@@ -74,6 +74,7 @@
       "displayName": "Windows x64 CI build",
       "description": "Build for Windows x64 on CI",
       "cacheVariables": {
+        "CMAKE_SYSTEM_VERSION": "10.0.22621.0",
         "CMAKE_COMPILE_WARNING_AS_ERROR": true,
         "CMAKE_INCLUDE_PATH": "${sourceDir}/.deps/obs-deps-2025-05-23-x64/include",
         "CMAKE_LIBRARY_PATH": "${sourceDir}/.deps/obs-deps-2025-05-23-x64/lib"
