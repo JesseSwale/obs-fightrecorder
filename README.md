@@ -10,8 +10,8 @@ An OBS plugin for the game Eve Online. The plugin detects if you are in combat a
 
 ## Installation
 - Before installing the plugin, make sure to enable the replay buffer functionality in Settings -> Output -> Replay buffer. 
-- Download the zip file from the latest release and put the DLL in the OBS plugins folder, which is `C:\Program Files\obs-studio\obs-plugins\64bit` by default.
-- Refer to the [Plugins Guide](https://obsproject.com/kb/plugins-guide) on how to install plugins for OBS if you need further information.
+- Download the zip file from the latest release
+- Unzip the file and place the `obs-plugins/64bit/obs-fightrecorder.dll` file in the OBS plugins folder, which is `C:\Program Files\obs-studio\obs-plugins\64bit` by default.
 
 ## Build
 To build this project please follow the steps [here](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide#windows) for Windows. You need Visual Studio 2022.
@@ -36,4 +36,7 @@ What is the grace period?
 > The number of seconds the plugin will record after the last combat trigger has been seen in the log file. Every time something combat-related happens in the log file the timer gets refreshed. The default value is 120s. 
 
 Can I concatenate (merge) the files after the combat is over?
-> Not for now.
+> Yes. However I cannot guarantee it works with all recording formats and video encodings. The final output file is also placed in your Recording directory (Settings -> Output -> Recording). The files automatically get the prefix "Fight". For example "Fight 2025-07-26 16-19-37.mkv".
+
+How does the plugin see if my Eve clients are running?
+> If the option "Replay buffer -> Start stop based on active Eve clients" is active I check (every 30 seconds) if there is a [windows title](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowtexta) that includes "Eve - ". If I find one the the replay buffer gets started. If I don't find any for 5 minutes the OBS replay buffer gets stopped again.
