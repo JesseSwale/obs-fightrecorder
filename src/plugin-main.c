@@ -621,6 +621,7 @@ void concat_recording_tuple() {
 	AVFormatContext *out_ctx = NULL;
 	AVStream *out_streams[MAX_STREAMS] = {0};
 	int64_t pts_offset[MAX_STREAMS] = {0};
+	int64_t dts_offset[MAX_STREAMS] = {0};
 	int stream_mapping[MAX_STREAMS] = {0};
 	int64_t max_dts[MAX_STREAMS] = {0};
 	int64_t max_pts[MAX_STREAMS] = {0};
@@ -639,21 +640,27 @@ void concat_recording_tuple() {
 	strncpy(output_path, recording->file_recording, MAX_PATH - 1);
 	output_path[MAX_PATH - 1] = '\0';
 
+	char *last_slash = NULL;
+	char *last_forwardslash = strrchr(output_path, '/');
 	char *last_backslash = strrchr(output_path, '\\');
-	if (!last_backslash) {
-		obs_log(LOG_ERROR, "Invalid path (no backslash): %s",
+	if (!last_backslash && !last_forwardslash) {
+		obs_log(LOG_ERROR, "Invalid path (no slashes): %s",
 			output_path);
 		return;
 	}
+	if (last_forwardslash)
+		last_slash = last_forwardslash;
+	if (last_backslash)
+		last_slash = last_backslash;
 
 	// Folder might come  from a config sometime later
-	size_t folder_length = last_backslash - output_path;
+	size_t folder_length = last_slash - output_path;
 	if (folder_length >= MAX_PATH)
 		folder_length = MAX_PATH - 1;
 	strncpy(folder, output_path, folder_length);
 	folder[folder_length] = '\0';
 
-	strncpy(filename, last_backslash + 1, MAX_PATH - 1);
+	strncpy(filename, last_slash + 1, MAX_PATH - 1);
 	filename[MAX_PATH - 1] = '\0';
 
 	snprintf(output_path, MAX_PATH, "%s%sFight %s", folder, FILE_SEPARATOR,
@@ -727,11 +734,7 @@ void concat_recording_tuple() {
 						    out_stream->time_base);
 
 			pkt.pts += pts_offset[out_idx];
-			pkt.dts += pts_offset[out_idx];
-
-			if (pkt.dts > max_dts[out_idx]) {
-				max_dts[out_idx] = pkt.dts;
-			}
+			pkt.dts += dts_offset[out_idx];
 
 			pkt.pos = -1;
 			pkt.stream_index = out_idx;
@@ -740,7 +743,10 @@ void concat_recording_tuple() {
 			av_packet_unref(&pkt);
 		}
 		for (int j = 0; j < num_streams; j++) {
-			pts_offset[j] = FFMAX(max_pts[j], max_dts[j]) + 1;
+			pts_offset[j] = max_pts[j] + 1;
+			dts_offset[j] = max_dts[j] + 1;
+			//pts_offset[j] = max_pts[j] + 1;
+			//dts_offset[j] = max_dts[j] + 1;
 		}
 		avformat_close_input(&in_ctx);
 	}
