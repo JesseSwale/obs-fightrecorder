@@ -62,6 +62,9 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 
 	obs_property_set_long_description(concat_property, "Concatenates (merges) the replay buffer and the recording file in a single output file when the fight is over.\nThe original files are not deleted.");
 
+	obs_property_t *delete_after_concat_property = obs_properties_add_bool(
+		group_main, "fightrecorder_delete_after_concat", "Delete Recording files after concatenation");
+
 	obs_properties_add_group(props, "Main", "Main settings",
 				 OBS_GROUP_NORMAL, group_main);
 
@@ -82,7 +85,25 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 				   obs_module_text("Start/Stop based on active Eve clients"),
 				   false);
 	
+	obs_property_set_modified_callback(concat_property,
+					   concat_property_modified);
+
 	return props;
+}
+
+bool concat_property_modified(obs_properties_t *props,
+				     obs_property_t *property,
+				     obs_data_t *settings) {
+	bool concat_enabled = obs_data_get_bool(settings, "fightrecorder_concat");
+	obs_property_t *delete_after_concat_property =
+		obs_properties_get(props, "fightrecorder_delete_after_concat");
+	if (delete_after_concat_property) {
+		obs_property_set_enabled(delete_after_concat_property, concat_enabled);
+		if (!concat_enabled) {
+			obs_data_set_bool(settings, "fightrecorder_delete_after_concat", false);
+		}
+	}
+	return true;
 }
 
 void save_replay_buffer_start_recording()
@@ -470,6 +491,7 @@ void dummy_source_defaults(obs_data_t *settings)
 	obs_data_set_default_bool(settings, "fightrecorder_replay_buffer_always_on", true);
 	//obs_data_set_default_bool(settings, "fightrecorder_concat", true);
 	obs_data_set_default_bool(settings, "fightrecorder_concat", true);
+	obs_data_set_default_bool(settings, "fightrecorder_delete_after_concat", false);
 	//obs_data_set_default_string(settings, "fight_recorder_logs_regex", "\\(combat\\)|has applied bonuses to");
 	//obs_data_set_default_string(settings, "fight_recorder_advanced_options", "");
 
@@ -480,7 +502,7 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 {
 	bool active_past = data->active;
 	data->active = obs_data_get_bool(settings, "fightrecorder_active");
-	data->concatdelete = obs_data_get_bool(settings, "fightrecorder_delete");
+	data->concatdelete = obs_data_get_bool(settings, "fightrecorder_delete_after_concat");
 	data->concat = obs_data_get_bool(settings, "fightrecorder_concat");
 	bfree(data->logs_dir);
 	data->logs_dir = bstrdup(obs_data_get_string(settings, "fightrecorder_logs_dir"));
@@ -513,6 +535,7 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 	obs_log(LOG_DEBUG, "fightrecorder_replay_buffer_always_on: %d",
 		data->replaybuffer_alwayson);
 	obs_log(LOG_DEBUG, "fightrecorder_concat: %d", data->concat);
+	obs_log(LOG_DEBUG, "fightrecorder_delete_after_concat: %d", data->concatdelete);
 }
 
 
@@ -573,6 +596,24 @@ static void source_defaults_frontend_event_cb(enum obs_frontend_event event,
 
 		if (fightrecorder->concat) {
 			concat_recording_tuple();
+
+			if (fightrecorder->concatdelete) {
+				if (!recording->file_replaybuffer || !recording->file_recording) {
+					obs_log(LOG_ERROR,
+						"Replay buffer and recording must be there in order to delete them");
+				} else {
+					if (os_unlink(recording->file_replaybuffer) !=0) {
+						blog(LOG_ERROR,"Failed to delete replay buffer '%s': %s",  recording->file_replaybuffer, strerror(errno));
+					} else {
+						blog(LOG_INFO, "Deleted replay buffer after concat: %s",recording->file_replaybuffer);
+					}
+					if (os_unlink(recording->file_recording) !=0) {
+						blog(LOG_ERROR,"Failed to delete recording '%s': %s",  recording->file_recording, strerror(errno));
+					} else {
+						blog(LOG_INFO, "Deleted recording after concat: %s",recording->file_recording);
+					}
+				}
+			}
 		}
 		break;
 	}
