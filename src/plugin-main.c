@@ -56,17 +56,35 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 
 	obs_properties_add_bool(group_main, "fightrecorder_active", "Active");
 
+
+	obs_properties_t *group_concat = obs_properties_create();
 	
-	obs_property_t *concat_property = obs_properties_add_bool(group_main, "fightrecorder_concat",
+	obs_property_t *concat_property = obs_properties_add_bool(
+		group_concat, "fightrecorder_concat",
 				"Enable Concatenation ");
 
-	obs_property_set_long_description(concat_property, "Concatenates (merges) the replay buffer and the recording file in a single output file when the fight is over.\nThe original files are not deleted.");
+	obs_property_set_long_description(
+		concat_property,
+		"Concatenates (merges) the replay buffer and the recording file in a single output file when the fight is over.\nThe original files are not deleted.");
 
 	obs_property_t *delete_after_concat_property = obs_properties_add_bool(
-		group_main, "fightrecorder_delete_after_concat", "Delete Recording files after concatenation");
+		group_concat, "fightrecorder_delete_after_concat",
+		" Delete Recording files after concatenation");
+
+		obs_property_set_long_description(
+		delete_after_concat_property,
+		"This setting automatically deletes the recording and replay buffer file. Only use this if you know the concatenation works with your encoding settings.");
+
+	obs_property_t *concat_output_property = obs_properties_add_path(group_concat,
+				"fightrecorder_concat_output_dir",
+				"Output Dir", OBS_PATH_DIRECTORY, NULL,
+				NULL);
 
 	obs_properties_add_group(props, "Main", "Main settings",
 				 OBS_GROUP_NORMAL, group_main);
+
+	obs_properties_add_group(props, "Concat", "Concatenation settings",
+				 OBS_GROUP_NORMAL, group_concat);
 
 	obs_properties_t *group_adv = obs_properties_create();
 
@@ -97,8 +115,11 @@ bool concat_property_modified(obs_properties_t *props,
 	bool concat_enabled = obs_data_get_bool(settings, "fightrecorder_concat");
 	obs_property_t *delete_after_concat_property =
 		obs_properties_get(props, "fightrecorder_delete_after_concat");
+	obs_property_t *concat_output_dir_property =
+		obs_properties_get(props, "fightrecorder_concat_output_dir");
 	if (delete_after_concat_property) {
 		obs_property_set_enabled(delete_after_concat_property, concat_enabled);
+		obs_property_set_enabled(concat_output_dir_property,concat_enabled);
 		if (!concat_enabled) {
 			obs_data_set_bool(settings, "fightrecorder_delete_after_concat", false);
 		}
@@ -439,7 +460,7 @@ void obs_module_unload(void)
 	bfree(fightrecorder->adv_options);
 	bfree(fightrecorder->logs_dir);
 	bfree(fightrecorder->logs_regex);
-	bfree(fightrecorder->output_dir);
+	bfree(fightrecorder->concat_output_dir);
 	bfree(fightrecorder);
 	obs_log(LOG_INFO, "Plugin unloaded");
 }
@@ -458,6 +479,7 @@ void dummy_source_destroy(void *data)
 void dummy_source_defaults(obs_data_t *settings)
 {
 	obs_log(LOG_INFO, "dummy_source_defaults");
+
 	char* default_path_logs = bzalloc(250 * sizeof(char));
 	sprintf_s(default_path_logs, 250 * sizeof(char), "%s%s%s%s%s%s%s%s%s",
 		  getenv(HOME_DIR),
@@ -465,35 +487,16 @@ void dummy_source_defaults(obs_data_t *settings)
 		  FILE_SEPARATOR, "logs", FILE_SEPARATOR,
 		  "Gamelogs");
 
-	obs_data_set_default_string(settings, "fightrecorder_logs_dir",
-				    default_path_logs);
+	const char *recording_path = NULL;
+	recording_path = bstrdup(obs_frontend_get_current_record_output_path());
 
-	//config_t* profile_config = obs_frontend_get_profile_config();
-
-	// Load useful default values depending on the current profile
-	//char *output_mode = config_get_string(profile_config, "Output", "Mode");
-	//char *rec_file_path =  config_get_string(profile_config, "AdvOut", "RecFilePath");
-	//if (strcmp(output_mode, "Advanced") == 0)
-	//{
-	//	obs_data_set_default_string(settings, "fightrecorder_output_dir", rec_file_path);
-	//}
-	//else
-	//{
-	//	obs_data_set_default_string(
-	//		settings, "fightrecorder_output_dir",
-	//		config_get_string(profile_config, "SimpleOutput",
-	//				  "FilePath"));
-	//}
-
+	obs_data_set_default_string(settings, "fightrecorder_concat_output_dir", recording_path);
+	obs_data_set_default_string(settings, "fightrecorder_logs_dir", default_path_logs);
 	obs_data_set_default_bool(settings, "fightrecorder_active", true);
-	//obs_data_set_default_bool(settings, "fightrecorder_delete", true);
 	obs_data_set_default_int(settings, "fightrecorder_grace_period", 120);
 	obs_data_set_default_bool(settings, "fightrecorder_replay_buffer_always_on", true);
-	//obs_data_set_default_bool(settings, "fightrecorder_concat", true);
 	obs_data_set_default_bool(settings, "fightrecorder_concat", true);
 	obs_data_set_default_bool(settings, "fightrecorder_delete_after_concat", false);
-	//obs_data_set_default_string(settings, "fight_recorder_logs_regex", "\\(combat\\)|has applied bonuses to");
-	//obs_data_set_default_string(settings, "fight_recorder_advanced_options", "");
 
 	bfree(default_path_logs);
 }
@@ -505,11 +508,12 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 	data->concatdelete = obs_data_get_bool(settings, "fightrecorder_delete_after_concat");
 	data->concat = obs_data_get_bool(settings, "fightrecorder_concat");
 	bfree(data->logs_dir);
+	data->concat_output_dir = bstrdup(obs_data_get_string(
+		settings, "fightrecorder_concat_output_dir"));
 	data->logs_dir = bstrdup(obs_data_get_string(settings, "fightrecorder_logs_dir"));
 	bfree(data->logs_regex);
 	data->logs_regex = bstrdup(obs_data_get_string(
 		settings, "fight_recorder_logs_regex"));
-	//data->output_dir = obs_data_get_string(settings, "fightrecorder_output_dir");
 	data->grace_period = obs_data_get_int(settings, "fightrecorder_grace_period");
 	bfree(data->adv_options);
 	data->adv_options = bstrdup(obs_data_get_string(
@@ -530,6 +534,7 @@ void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
 		stop_observer_thread();
 	}
 	obs_log(LOG_DEBUG, "fightrecorder_logs_dir: %s", data->logs_dir);
+	obs_log(LOG_DEBUG, "fightrecorder_concat_output_dir: %s", data->concat_output_dir);
 	// obs_log(LOG_DEBUG, "fight_recorder_logs_regex: %s", data->logs_regex);
 	obs_log(LOG_DEBUG, "fightrecorder_grace_period: %d", data->grace_period);
 	obs_log(LOG_DEBUG, "fightrecorder_replay_buffer_always_on: %d",
@@ -694,23 +699,35 @@ void concat_recording_tuple() {
 	if (last_backslash)
 		last_slash = last_backslash;
 
-	// Folder might come  from a config sometime later
-	size_t folder_length = last_slash - output_path;
-	if (folder_length >= MAX_PATH)
-		folder_length = MAX_PATH - 1;
-	strncpy(folder, output_path, folder_length);
-	folder[folder_length] = '\0';
-
 	strncpy(filename, last_slash + 1, MAX_PATH - 1);
 	filename[MAX_PATH - 1] = '\0';
 
+	//// Folder might come from a config sometime later
+	//size_t folder_length = last_slash - output_path;
+	//if (folder_length >= MAX_PATH)
+	//	folder_length = MAX_PATH - 1;
+	//strncpy(folder, output_path, folder_length);
+	//folder[folder_length] = '\0';
+
+	strncpy(folder, fightrecorder->concat_output_dir, MAX_PATH - 1);
+	folder[MAX_PATH - 1] = '\0';
+	size_t len = strlen(folder);
+	if (len > 0 && (folder[len - 1] == '/' || folder[len - 1] == '\\')) {
+		folder[len - 1] = '\0';
+	}
+
+	obs_log(LOG_DEBUG, "concat folder will be: %s", folder);
+	obs_log(LOG_DEBUG, "concat file will be: %s", filename);
+
 	snprintf(output_path, MAX_PATH, "%s%sFight %s", folder, FILE_SEPARATOR,
 		 filename);
+	obs_log(LOG_DEBUG, "concat output_path will be: %s", output_path);
+	
 
 	// Open output context
 	avformat_alloc_output_context2(&out_ctx, NULL, NULL, output_path);
 	if (!out_ctx) {
-		fprintf(stderr, "Could not create output context\n");
+		obs_log(LOG_ERROR, "Could not create output context\n");
 		return;
 	}
 

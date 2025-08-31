@@ -38,7 +38,7 @@ typedef struct fightrecorder_data {
 	bool replaybuffer_alwayson;
 	char *logs_dir;
 	char *logs_regex;
-	char *output_dir;
+	char *concat_output_dir;
 	__int64 grace_period;
 	char *adv_options;
 
