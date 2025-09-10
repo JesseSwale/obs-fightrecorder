@@ -38,7 +38,7 @@ typedef struct fightrecorder_data {
 	bool replaybuffer_alwayson;
 	char *logs_dir;
 	char *logs_regex;
-	char *output_dir;
+	char *concat_output_dir;
 	__int64 grace_period;
 	char *adv_options;
 
@@ -87,6 +87,7 @@ void *dummy_source_create(obs_data_t *settings, obs_source_t *source);
 void on_obs_frontend_event_exit();
 bool obs_module_load(void);
 void on_obs_frontend_event_finished_loading();
+bool concat_property_modified(obs_properties_t *props, obs_property_t *property, obs_data_t *settings);
 
 #ifdef _WIN32
 	BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam);
