@@ -91,22 +91,25 @@
       "name": "linux-x86_64",
       "displayName": "Linux x86_64",
       "description": "Build for Linux x86_64",
-      "inherits": ["template"],
+      "inherits": [ "template" ],
       "binaryDir": "${sourceDir}/build_x86_64",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
-        "rhs": "Linux"
+        "rhs": "Ubuntu"
       },
       "generator": "Ninja",
-      "warnings": {"dev": true, "deprecated": true},
+      "warnings": {
+        "dev": true,
+        "deprecated": true
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
     },
     {
       "name": "linux-ci-x86_64",
-      "inherits": ["linux-x86_64"],
+      "inherits": [ "linux-x86_64" ],
       "displayName": "Linux x86_64 CI build",
       "description": "Build for Linux x86_64 on CI",
       "cacheVariables": {

@@ -38,16 +38,15 @@
   },
   "platformConfig": {
     "macos": {
-      "bundleId": "com.github.JesseSwale.obs-plugintemplate"
+      "bundleId": "com.github.JesseSwale.obs-fightrecorder"
     }
+  },
+  "uuids": {
+    "windowsApp": "3C8D4C1A-AD5A-4ABE-BE3C-0B7E3C7357EA"
   },
   "name": "obs-fightrecorder",
   "displayName": "obs-fightrecorder",
   "version": "0.5.0",
   "author": "Jesse Swale",
-  "email": "me@exmaple.org",
-  "website": "https://github.com/JesseSwale/obs-fightrecorder",
-  "uuids": {
-    "windowsApp": "00000000-0000-0000-0000-000000000000"
-  }
+  "website": "https://github.com/JesseSwale/obs-fightrecorder"
 }
