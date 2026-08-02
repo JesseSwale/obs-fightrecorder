@@ -36,7 +36,7 @@ What is the grace period?
 > The number of seconds the plugin will record after the last combat trigger has been seen in the log file. Every time something combat-related happens in the log file the timer gets refreshed. The default value is 120s. 
 
 Can I concatenate (merge) the files after the combat is over?
-> Yes. However I cannot guarantee it works with all recording formats and video encodings. The final output file is also placed in your Recording directory (Settings -> Output -> Recording). The files automatically get the prefix "Fight". For example "Fight 2025-07-26 16-19-37.mkv".
+> Yes. However I cannot guarantee it works with all recording settings. The final output file is also placed in your Recording directory (Settings -> Output -> Recording). The files automatically get the prefix "Fight". For example "Fight 2025-07-26 16-19-37.mkv".
 
 How does the plugin see if my Eve clients are running?
 > If the option "Replay buffer -> Start stop based on active Eve clients" is active I check (every 30 seconds) if there is a [windows title](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowtexta) that includes "Eve - ". If I find one the the replay buffer gets started. If I don't find any for 5 minutes the OBS replay buffer gets stopped again.

@@ -19,6 +19,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>
 #include <plugin-support.h>
 #include <obs-frontend-api.h>
 #include <obs-source.h>
+#include <sys/stat.h>
 #include <util/platform.h>
 #include <util/config-file.h>
 #include <util/threading.h>
@@ -37,8 +38,7 @@ fightrecorder_rec_t *recording = NULL;
 
 obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 {
-	struct fightrecorder_data *data = fightrecorder_data;
-
+	UNUSED_PARAMETER(fightrecorder_data);
 	obs_properties_t *props = obs_properties_create();
 
 	obs_properties_set_flags(props, OBS_PROPERTIES_DEFER_UPDATE);
@@ -75,7 +75,7 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 		delete_after_concat_property,
 		"This setting automatically deletes the recording and replay buffer file. Only use this if you know the concatenation works with your encoding settings.");
 
-	obs_property_t *concat_output_property = obs_properties_add_path(group_concat,
+	obs_properties_add_path(group_concat,
 				"fightrecorder_concat_output_dir",
 				"Output Dir", OBS_PATH_DIRECTORY, NULL,
 				NULL);
@@ -112,6 +112,8 @@ obs_properties_t *dummy_source_properties(void *fightrecorder_data)
 bool concat_property_modified(obs_properties_t *props,
 				     obs_property_t *property,
 				     obs_data_t *settings) {
+	UNUSED_PARAMETER(property);
+
 	bool concat_enabled = obs_data_get_bool(settings, "fightrecorder_concat");
 	obs_property_t *delete_after_concat_property =
 		obs_properties_get(props, "fightrecorder_delete_after_concat");
@@ -160,6 +162,7 @@ void open_fightrecorder_settings(void *data)
 
 bool check_file(FILE *file, const char *word, long *position)
 {
+	UNUSED_PARAMETER(position);
 	char line[1024];
 	while (fgets(line, sizeof(line), file)) {
 		if (strstr(line, word)) {
@@ -273,14 +276,18 @@ bool observer_thread_needs_shutdown() {
 	return result;
 }
 
-void *monitor_file_and_control_recording(fightrecorder_data_t *arg)
+void *monitor_file_and_control_recording(void *param)
 {
+	fightrecorder_data_t *arg = (fightrecorder_data_t *)param;
+
 	int sleep = 1000;
 	int update_files_sleep = 30000;
-	int active_windows_sleep = 30000;
 	int update_files_iter = 30000;
+
+#ifdef _WIN32
 	int replaybuffer_timeout = 0;
-	
+	int active_windows_sleep = 30000;
+#endif
 	time_t end_recording_time = time(NULL);
 	logfile_t *head = NULL;
 	logfile_t *curr = head;
@@ -481,7 +488,7 @@ void dummy_source_defaults(obs_data_t *settings)
 	obs_log(LOG_INFO, "dummy_source_defaults");
 
 	char* default_path_logs = bzalloc(250 * sizeof(char));
-	sprintf_s(default_path_logs, 250 * sizeof(char), "%s%s%s%s%s%s%s%s%s",
+	snprintf(default_path_logs, 250 * sizeof(char), "%s%s%s%s%s%s%s%s%s",
 		  getenv(HOME_DIR),
 		  FILE_SEPARATOR, "Documents", FILE_SEPARATOR, "Eve",
 		  FILE_SEPARATOR, "logs", FILE_SEPARATOR,
@@ -501,8 +508,10 @@ void dummy_source_defaults(obs_data_t *settings)
 	bfree(default_path_logs);
 }
 
-void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings)
+void dummy_source_update(void *param, obs_data_t *settings)
 {
+	fightrecorder_data_t *data = (fightrecorder_data_t *)param;
+
 	bool active_past = data->active;
 	data->active = obs_data_get_bool(settings, "fightrecorder_active");
 	data->concatdelete = obs_data_get_bool(settings, "fightrecorder_delete_after_concat");
@@ -572,11 +581,13 @@ static void source_defaults_frontend_event_cb(enum obs_frontend_event event,
 	case OBS_FRONTEND_EVENT_EXIT:
 		on_obs_frontend_event_exit();
 		break;
-	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_SAVED:
+	case OBS_FRONTEND_EVENT_REPLAY_BUFFER_SAVED: {
 		char *replay_output = obs_frontend_get_last_replay();
 
 		if (fightrecorder->started_recording) {
-			obs_log(LOG_INFO, "Replaybuffer %s saved as part of the fight", replay_output);
+			obs_log(LOG_INFO,
+				"Replaybuffer %s saved as part of the fight",
+				replay_output);
 			recording->file_replaybuffer = replay_output;
 		} else {
 			obs_log(LOG_WARNING,
@@ -584,7 +595,9 @@ static void source_defaults_frontend_event_cb(enum obs_frontend_event event,
 				replay_output);
 		}
 		break;
-	case OBS_FRONTEND_EVENT_RECORDING_STOPPED:
+	}
+	case OBS_FRONTEND_EVENT_RECORDING_STOPPED: 
+	{
 		char *recording_output = obs_frontend_get_last_recording();
 		if (fightrecorder->started_recording) {
 			obs_log(LOG_INFO,
@@ -622,6 +635,9 @@ static void source_defaults_frontend_event_cb(enum obs_frontend_event event,
 		}
 		break;
 	}
+	default:
+		break; 
+	}
 }
 
 void on_obs_frontend_event_exit()
@@ -637,7 +653,7 @@ void on_obs_frontend_event_exit()
 
 bool obs_module_load(void)
 {
-	struct obs_source_info fightrecorder_source = {
+	struct obs_source_info fightrecorder_s = {
 		.id = "fightrecorder-source",
 		.type = OBS_SOURCE_TYPE_FILTER,
 		.output_flags = OBS_SOURCE_CAP_DISABLED,
@@ -648,7 +664,7 @@ bool obs_module_load(void)
 		.get_defaults = dummy_source_defaults,
 		.get_properties = dummy_source_properties,
 	};
-	obs_register_source(&fightrecorder_source);
+	obs_register_source(&fightrecorder_s);
 
 	obs_frontend_add_event_callback(source_defaults_frontend_event_cb,
 					NULL);
@@ -672,9 +688,10 @@ void concat_recording_tuple() {
 	int64_t max_dts[MAX_STREAMS] = {0};
 	int64_t max_pts[MAX_STREAMS] = {0};
 	int num_streams = 0;
-	char output_path[MAX_PATH];
+	char output_path[MAX_PATH + 32];
 	char folder[MAX_PATH];
 	char filename[MAX_PATH];
+	int ret = 0;
 
 	if (!recording->file_replaybuffer || !recording->file_recording) {
 		obs_log(LOG_ERROR, "Replay buffer or recording is missing, can't concatenate.");
@@ -719,7 +736,7 @@ void concat_recording_tuple() {
 	obs_log(LOG_DEBUG, "concat folder will be: %s", folder);
 	obs_log(LOG_DEBUG, "concat file will be: %s", filename);
 
-	snprintf(output_path, MAX_PATH, "%s%sFight %s", folder, FILE_SEPARATOR,
+	snprintf(output_path, MAX_PATH + 32, "%s%sFight %s", folder, FILE_SEPARATOR,
 		 filename);
 	obs_log(LOG_DEBUG, "concat output_path will be: %s", output_path);
 	
@@ -757,7 +774,7 @@ void concat_recording_tuple() {
 					return;
 				}
 			}
-			avformat_write_header(out_ctx, NULL);
+			ret = avformat_write_header(out_ctx, NULL);
 		}
 
 		AVPacket pkt;

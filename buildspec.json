@@ -1,25 +1,21 @@
 {
 
   "dependencies": {
-
-    // OBS Studio Update check here: https://github.com/obsproject/obs-studio/tags
     "obs-studio": {
       "version": "32.2.1",
       "baseUrl": "https://github.com/obsproject/obs-studio/archive/refs/tags",
       "label": "OBS sources",
       "hashes": {
-        "macos": "a",
+        "macos": "DB034BC3D2C137EC7F1809CBEF4FC90C8948652B90A860078410482457D8A574",
         "windows-x64": "0cc1bd46a3d60c8f4317b38c27414fc0472e04609f4e67ad2142ed1598ef5462"
       }
     },
-
-    // OBS Deps Update check here: https://github.com/obsproject/obs-deps/releases/
     "prebuilt": {
       "version": "2026-07-15",
       "baseUrl": "https://github.com/obsproject/obs-deps/releases/download",
       "label": "Pre-Built obs-deps",
       "hashes": {
-        "macos": "a",
+        "macos": "4ecb4c598dfa853168df6c2a0c4e0ffec8495a81fbd1ba051ef88ecd5e0f7e53",
         "windows-x64": "6f90e9598fa10cff5ad23cdcfae49b87868c07bf896b02cd464582b4ce2f2ba9"
       }
     },
@@ -28,7 +24,7 @@
       "baseUrl": "https://github.com/obsproject/obs-deps/releases/download",
       "label": "Pre-Built Qt6",
       "hashes": {
-        "macos": "a",
+        "macos": "d4b8058612a7067e44b2205fe7925ee24e9ec6b15ac8c29d3e6230c70030b102",
         "windows-x64": "7c7f985711d80467bdc1795b6592275a27d5b0e5a2c7a61db1f2c1d08d6a5579"
       },
       "debugSymbols": {
@@ -38,16 +34,16 @@
   },
   "platformConfig": {
     "macos": {
-      "bundleId": "com.github.JesseSwale.obs-plugintemplate"
+      "bundleId": "com.github.JesseSwale.obs-fightrecorder"
     }
+  },
+  "uuids": {
+    "windowsApp": "3C8D4C1A-AD5A-4ABE-BE3C-0B7E3C7357EA"
   },
   "name": "obs-fightrecorder",
   "displayName": "obs-fightrecorder",
   "version": "0.5.0",
   "author": "Jesse Swale",
-  "email": "me@exmaple.org",
   "website": "https://github.com/JesseSwale/obs-fightrecorder",
-  "uuids": {
-    "windowsApp": "00000000-0000-0000-0000-000000000000"
-  }
+  "email": "JesseSwale@users.noreply.github.com"
 }

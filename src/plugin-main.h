@@ -19,6 +19,7 @@
 	#define __pclose pclose
 #endif
 
+#include <stdint.h>
 #include <pthread.h>
 
 
@@ -39,7 +40,7 @@ typedef struct fightrecorder_data {
 	char *logs_dir;
 	char *logs_regex;
 	char *concat_output_dir;
-	__int64 grace_period;
+	int64_t grace_period;
 	char *adv_options;
 
 	// state
@@ -71,7 +72,7 @@ bool check_file(FILE *file, const char *word, long *position);
 void free_logfiles(logfile_t *head);
 logfile_t *create_logfile_node(const char *file_path);
 void add_logfile_if_not_exists(logfile_t **head, const char *file_path);
-void *monitor_file_and_control_recording(fightrecorder_data_t *arg);
+void *monitor_file_and_control_recording(void *param);
 bool observer_thread_needs_shutdown();
 void start_observer_thread();
 void stop_observer_thread();
@@ -82,7 +83,7 @@ void obs_module_unload(void);
 const char *dummy_source_name(void *data);
 void dummy_source_destroy(void *data);
 void dummy_source_defaults(obs_data_t *settings);
-void dummy_source_update(fightrecorder_data_t *data, obs_data_t *settings);
+void dummy_source_update(void *arg, obs_data_t *settings);
 void *dummy_source_create(obs_data_t *settings, obs_source_t *source);
 void on_obs_frontend_event_exit();
 bool obs_module_load(void);
@@ -92,4 +93,3 @@ bool concat_property_modified(obs_properties_t *props, obs_property_t *property,
 #ifdef _WIN32
 	BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam);
 #endif
-

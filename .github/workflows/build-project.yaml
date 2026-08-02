@@ -72,9 +72,8 @@ jobs:
           fi
 
   macos-build:
-    if: false
     name: Build for macOS 🍏
-    runs-on: macos-15
+    runs-on: macos-26
     needs: check-event
     defaults:
       run:
@@ -85,6 +84,8 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: List available Xcode versions
+        run: ls /Applications | grep Xcode
       - name: Set Up Environment 🔧
         id: setup
         run: |
@@ -92,7 +93,7 @@ jobs:
           if (( ${+RUNNER_DEBUG} )) setopt XTRACE
 
           print '::group::Enable Xcode 16.1'
-          sudo xcode-select --switch /Applications/Xcode_16.1.0.app/Contents/Developer
+          sudo xcode-select --switch /Applications/Xcode_26.5.app/Contents/Developer
           print '::endgroup::'
 
           print '::group::Clean Homebrew Environment'
@@ -177,7 +178,6 @@ jobs:
           key: ${{ runner.os }}-ccache-${{ needs.check-event.outputs.config }}
 
   ubuntu-build:
-    if: false
     name: Build for Ubuntu 🐧
     strategy:
       matrix:
@@ -204,6 +204,8 @@ jobs:
 
           echo "pluginName=${product_name}" >> $GITHUB_OUTPUT
           echo "pluginVersion=${product_version}" >> $GITHUB_OUTPUT
+
+          chmod +x ./.github/actions/package-plugin
 
       - uses: actions/cache/restore@v4
         id: ccache-cache
