@@ -110,7 +110,7 @@
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
-        "rhs": "Ubuntu"
+        "rhs": "Linux"
       },
       "generator": "Ninja",
       "warnings": {

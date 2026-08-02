@@ -26,10 +26,20 @@ include(helpers)
 
 add_library(${CMAKE_PROJECT_NAME} MODULE)
 
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE 
-    "${CMAKE_LIBRARY_PATH}/avformat.lib"
-    "${CMAKE_LIBRARY_PATH}/avutil.lib"
-    "${CMAKE_LIBRARY_PATH}/avcodec.lib")
+if(WIN32)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
+        "${CMAKE_LIBRARY_PATH}/avformat.lib"
+        "${CMAKE_LIBRARY_PATH}/avutil.lib"
+        "${CMAKE_LIBRARY_PATH}/avcodec.lib")
+else()
+    find_library(AVFORMAT_LIBRARY avformat REQUIRED)
+    find_library(AVUTIL_LIBRARY avutil REQUIRED)
+    find_library(AVCODEC_LIBRARY avcodec REQUIRED)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
+        ${AVFORMAT_LIBRARY}
+        ${AVUTIL_LIBRARY}
+        ${AVCODEC_LIBRARY})
+endif()
 
 find_package(libobs REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)

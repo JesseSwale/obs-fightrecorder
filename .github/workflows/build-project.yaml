@@ -205,6 +205,8 @@ jobs:
           echo "pluginName=${product_name}" >> $GITHUB_OUTPUT
           echo "pluginVersion=${product_version}" >> $GITHUB_OUTPUT
 
+          chmod +x ./.github/actions/package-plugin
+
       - uses: actions/cache/restore@v4
         id: ccache-cache
         with:
