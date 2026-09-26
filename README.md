@@ -11,7 +11,8 @@ An OBS plugin for the game Eve Online. The plugin detects if you are in combat a
 ## Installation
 - Before installing the plugin, make sure to enable the replay buffer functionality in Settings -> Output -> Replay buffer. 
 - Download the zip file from the latest release
-- Unzip the file and place the `obs-plugins/64bit/obs-fightrecorder.dll` file in the OBS plugins folder, which is `C:\Program Files\obs-studio\obs-plugins\64bit` by default.
+- Unzip the file and place the `obs-plugins/64bit/obs-fightrecorder.dll` file in a new folder called `obs-fightrecorder` in `%PROGRAMDATA%\obs-studio\plugins` OBS plugins folder
+- The dll should be here afterwards: `C:\ProgramData\obs-studio\plugins\obs-fightrecorder`
 
 ## Build
 To build this project please follow the steps [here](https://github.com/obsproject/obs-plugintemplate/wiki/Quick-Start-Guide#windows) for Windows. You need Visual Studio 2022.

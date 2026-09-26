@@ -67,6 +67,40 @@ function Package {
     }
     Compress-Archive -Force @CompressArgs
     Log-Group
+
+    # Package for windows inno setup installer, according to
+    # https://github.com/obsproject/obs-plugintemplate/wiki
+
+    # Declare the location of the InnoSetup setup file
+    $IsccFile = "${ProjectRoot}/build_${Target}/installer-windows.iss"
+
+    # Throw an error if the provided path is invalid
+    if ( ! ( Test-Path -Path $IsccFile ) ) {
+        throw 'InnoSetup install script not found. Run the build script or the CMake build and install procedures first.'
+    }
+
+    Log-Information 'Creating InnoSetup installer...'
+
+    # Push the current location on the "BuildTemp" directory stack for easier return later
+    Push-Location -Stack BuildTemp
+
+    # Change to "release" sub-directory of the project root directory
+    Ensure-Location -Path "${ProjectRoot}/release"
+
+    # Copy the directory for the specified configuration (e.g. "Release") to a new directory named "Package"
+    Copy-Item -Path ${Configuration} -Destination Package -Recurse
+
+    # Invoke the InnoSetup iscc compiler with the specified setup file and the sub-directory "release" in 
+    # the project root directory as the output directory
+    Invoke-External iscc ${IsccFile} /O"${ProjectRoot}/release" /F"${OutputName}-Installer"
+
+    # Remove the copied "Package" directory and its contents
+    Remove-Item -Path Package -Recurse
+
+    # Pop the location stored in the "BuildTemp" directory stack earlier
+    Pop-Location -Stack BuildTemp
+
+    Log-Group
 }
 
 Package

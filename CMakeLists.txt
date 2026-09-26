@@ -56,5 +56,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.c)
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_INCLUDE_PATH})
 
+configure_file(
+  cmake/windows/installer-windows.iss.in
+  ${CMAKE_BINARY_DIR}/installer-windows.iss
+  @ONLY
+)
+
 
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})

@@ -1,0 +1,34 @@
+#define MyAppName "@CMAKE_PROJECT_NAME@"
+#define MyAppVersion "@CMAKE_PROJECT_VERSION@"
+#define MyAppPublisher "@PLUGIN_AUTHOR@"
+#define MyAppURL "@PLUGIN_WEBSITE@"
+
+[Setup]
+AppId={{@_windowsAppUUID@}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}
+AppUpdatesURL={#MyAppURL}
+DisableProgramGroupPage=yes
+DisableDirPage=yes
+DefaultDirName={commonappdata}\obs-studio\plugins\obs-fightrecorder
+DefaultGroupName={#MyAppName}
+OutputBaseFilename={#MyAppName}-{#MyAppVersion}-Windows-Installer
+Compression=lzma
+SolidCompression=yes
+DirExistsWarning=no
+
+[Messages]
+WelcomeLabel2=Setup will install {#MyAppName} to the standard OBS plugins folder (C:\ProgramData\obs-studio\plugins\). If you want to install obs-fightrecorder in a different location please download the Zip file and extract it there directly.
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Files]
+Source: "..\release\Package\obs-plugins\64bit\obs-fightrecorder.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\release\Package\obs-plugins\64bit\obs-fightrecorder.pdb"; DestDir: "{app}"; Flags: ignoreversion
+
+[Icons]
+Name: "{group}\{cm:ProgramOnTheWeb,{#MyAppName}}"; Filename: "{#MyAppURL}"	

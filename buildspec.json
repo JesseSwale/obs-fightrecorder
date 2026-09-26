@@ -43,11 +43,11 @@
   },
   "name": "obs-fightrecorder",
   "displayName": "obs-fightrecorder",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": "Jesse Swale",
   "email": "me@exmaple.org",
   "website": "https://github.com/JesseSwale/obs-fightrecorder",
   "uuids": {
-    "windowsApp": "00000000-0000-0000-0000-000000000000"
+    "windowsApp": "5CF33D83-8CAF-4F43-8BE9-1265209A24F3"
   }
 }
